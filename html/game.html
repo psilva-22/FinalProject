@@ -1,0 +1,761 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Farthest Shot Elite</title>
+    <style>
+        /* Basic Styling */
+        body {
+            font-family: 'Inter', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background-color: #f0f4f8; /* Light background */
+            margin: 0;
+            padding: 20px;
+        }
+
+        /* Game Container */
+        #game-container {
+            width: 90%;
+            max-width: 800px;
+            background-color: #4CAF50; /* Green field */
+            border: 10px solid #388E3C;
+            box-shadow: 0 8px 16px rgba(0,0,0,0.3);
+            position: relative;
+            height: 400px;
+            overflow: hidden; 
+            cursor: default; 
+            border-radius: 12px;
+        }
+
+        /* Field Markings (Center Line) */
+        #game-container::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 50%;
+            width: 3px;
+            height: 100%;
+            background-color: white;
+            opacity: 0.6;
+        }
+
+        /* Goal Area (Target) */
+        #goal {
+            position: absolute;
+            right: 0;
+            top: 20%;
+            width: 35px; /* Depth of the goal */
+            height: 60%;
+            background-color: #ccc;
+            border: 4px solid #333;
+            box-sizing: border-box;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #333;
+            text-align: center;
+            z-index: 5;
+            border-radius: 4px;
+        }
+        #goal-net {
+            width: 100%;
+            height: 100%;
+            /* Creating a subtle net pattern */
+            background: 
+                linear-gradient(to right, transparent 9px, rgba(255, 255, 255, 0.5) 9px, rgba(255, 255, 255, 0.5) 10px, transparent 10px),
+                linear-gradient(to bottom, transparent 9px, rgba(255, 255, 255, 0.5) 9px, rgba(255, 255, 255, 0.5) 10px, transparent 10px);
+            background-size: 10px 10px;
+        }
+
+        /* Goalie element (The AI Keeper) */
+        #goalie {
+            position: absolute;
+            right: 35px; /* Right next to the goal posts */
+            width: 8px; /* Goalie body width */
+            background-color: #FF5722; /* Orange kit */
+            border-radius: 4px;
+            transform: translateY(-50%);
+            z-index: 8;
+            transition: top 0.1s linear, background-color 0.1s;
+        }
+
+        /* Opponent Defenders */
+        .defender {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background-color: #00008B; /* Dark Blue Kit */
+            border: 3px solid white;
+            box-shadow: 0 0 5px rgba(0, 0, 0, 0.3);
+            transform: translate(-50%, -50%);
+            z-index: 9;
+            font-size: 12px;
+            font-weight: bold;
+            text-align: center;
+            line-height: 14px;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0; /* Hidden until activated by score */
+            transition: opacity 0.5s;
+        }
+        #defender1 { right: 25%; } /* Further away */
+        #defender2 { right: 15%; } /* Closer to goal */
+
+
+        /* Teammate Targets (These are where the pass lands and disappear once possessed) */
+        .teammate {
+            position: absolute;
+            width: 25px;
+            height: 25px;
+            border-radius: 50%;
+            background-color: #FFC107; /* Yellow Kit */
+            border: 3px solid #FFA000;
+            box-shadow: 0 0 5px rgba(0, 0, 0, 0.3);
+            transform: translate(-50%, -50%);
+            z-index: 9;
+            font-size: 14px;
+            font-weight: bold;
+            text-align: center;
+            line-height: 20px;
+            color: #333;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            pointer-events: none; 
+            animation: pulse 2s infinite alternate; 
+            transition: visibility 0s; /* Allow visibility to change instantly */
+        }
+
+        /* Passer Marker (The player who just passed the ball, dynamically created) */
+        .pass-marker {
+            position: absolute;
+            width: 25px;
+            height: 25px;
+            border-radius: 50%;
+            background-color: #FFC107; /* Yellow Kit */
+            border: 3px solid #FFA000;
+            box-shadow: 0 0 5px rgba(0, 0, 0, 0.5); /* Less pronounced than the pulse */
+            transform: translate(-50%, -50%);
+            z-index: 9;
+            font-size: 14px;
+            font-weight: bold;
+            text-align: center;
+            line-height: 20px;
+            color: #333;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            pointer-events: none; 
+            opacity: 0.7;
+        }
+
+        @keyframes pulse {
+            from { opacity: 0.8; transform: translate(-50%, -50%) scale(1); }
+            to { opacity: 1; transform: translate(-50%, -50%) scale(1.1); }
+        }
+        
+        /* Soccer Ball (Represents the Active Player in possession) */
+        #ball {
+            position: absolute;
+            width: 25px;
+            height: 25px;
+            border-radius: 50%;
+            /* Classic black and white soccer ball pattern */
+            background: radial-gradient(circle at 35% 35%, white 2px, black 4px, white 6px, black 8px, white 12px, black 13px, white 15px);
+            left: 5%; /* Starting position */
+            top: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 10;
+            
+            /* DESIGN UPDATE: Yellow circle/glow for possession */
+            box-shadow: 0 0 0 5px rgba(255, 255, 0, 0.7), 2px 2px 5px rgba(0, 0, 0, 0.5);
+            animation: possessionGlow 1.5s infinite alternate;
+        }
+
+        /* Animation for the possession glow */
+        @keyframes possessionGlow {
+            from { box-shadow: 0 0 0 3px rgba(255, 255, 0, 0.7), 2px 2px 5px rgba(0, 0, 0, 0.5); }
+            to { box-shadow: 0 0 0 7px rgba(255, 255, 0, 0.9), 2px 2px 5px rgba(0, 0, 0, 0.8); }
+        }
+
+        /* Scoreboard and Instructions */
+        #instructions-card {
+            background-color: #ffffff;
+            padding: 15px 30px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            width: 90%;
+            max-width: 800px;
+            text-align: center;
+        }
+        
+        #ui {
+            margin-top: 15px;
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            width: 90%;
+            max-width: 800px;
+            padding: 10px;
+            background-color: #1E88E5; /* Blue info bar */
+            color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            font-size: 1.1em;
+            font-weight: 500;
+        }
+
+        .score-display {
+            padding: 5px 10px;
+            border-radius: 4px;
+        }
+
+        .highlight {
+            color: #FFEB3B; /* Yellow highlight */
+            font-weight: bold;
+        }
+
+    </style>
+</head>
+<body>
+
+    <div id="instructions-card">
+        <h2>⚽ The Farthest Shot Elite Challenge 🚀</h2>
+        <p>The **soccer ball** (with the yellow glow) represents the player currently in possession.</p>
+        <p><strong>Control:</strong> Use <strong>Arrow Keys</strong> (or W/A/S/D) to dribble and move the active player.</p>
+        <p><strong>Pass & Switch Control:</strong> Press <strong>'1'</strong> or <strong>'2'</strong>. The target player icon disappears, and you take control from that spot!</p>
+        <p><strong>Shoot:</strong> Press the <strong>SPACE BAR</strong> + <strong>UP/DOWN Arrows</strong> to aim your shot!</p>
+        <p class="highlight">🔥 **CHALLENGE:** Defense increases with score: **D1** at 50 pts, **D2** at 100 pts. Goalie gets smaller and faster!</p>
+    </div>
+
+    <div id="ui">
+        <div class="score-display">Total Score: <span id="score-value">0</span></div>
+        <div class="score-display">Last Shot Points: <span id="last-points" class="highlight">0</span></div>
+    </div>
+
+    <div id="game-container">
+        <div id="goal"><div id="goal-net"></div></div>
+        <div id="goalie"></div> <!-- AI Goalie -->
+        <div id="defender1" class="defender">D1</div> <!-- Opponent Defender 1 -->
+        <div id="defender2" class="defender">D2</div> <!-- Opponent Defender 2 -->
+        <!-- Teammate 1: Static target for passing -->
+        <div id="player1" class="teammate" style="left: 65%; top: 30%;">1</div>
+        <!-- Teammate 2: Static target for passing (Moved further forward) -->
+        <div id="player2" class="teammate" style="left: 80%; top: 70%;">2</div> 
+        <div id="ball"></div> <!-- Player/Ball -->
+    </div>
+
+    <script>
+        const gameContainer = document.getElementById('game-container');
+        const ball = document.getElementById('ball');
+        const goal = document.getElementById('goal');
+        const goalie = document.getElementById('goalie');
+        const defender1 = document.getElementById('defender1');
+        const defender2 = document.getElementById('defender2');
+        const scoreValue = document.getElementById('score-value');
+        const lastPointsDisplay = document.getElementById('last-points');
+
+        let score = 0;
+        let isBallMoving = false; 
+        
+        // Ball State 
+        const startBallX = 5; 
+        let ballX = startBallX; 
+        let ballY = 50;         
+        const ballSpeed = 0.8;  
+        let keysPressed = {};   
+
+        // Goalie State and Scaling
+        const BASE_GOALIE_HEIGHT_PX = 80;
+        const MIN_GOALIE_HEIGHT_PX = 40;
+        const BASE_GOALIE_SPEED = 0.5; 
+        let currentGoalieHeight = BASE_GOALIE_HEIGHT_PX;
+        let currentGoalieSpeed = BASE_GOALIE_SPEED;
+
+        let goalieY = 50; 
+        let goalieDirection = 1; 
+        const goalieRange = { min: 35, max: 65 }; 
+        
+        // Defender State 
+        const DEFENDER_SPEED = 0.4; 
+        let defender1X = 75; 
+        let defender1Y = 50; 
+        let isDefender1Active = false;
+
+        let defender2X = 85; 
+        let defender2Y = 50;
+        let isDefender2Active = false;
+
+        // Teammate positions (static targets)
+        const playerPositions = {
+            '1': { x: 65, y: 30 }, 
+            '2': { x: 80, y: 70 }  
+        };
+
+
+        // --- Goalie and Defender AI Management ---
+
+        /**
+         * Scales goalie size and speed and activates defenders based on the current score.
+         */
+        function updateGoalieAndDefenderStats() {
+            // Calculate difficulty factor
+            const scoreFactor = Math.floor(score / 50); 
+            
+            // 1. Goalie Scaling
+            currentGoalieSpeed = Math.min(BASE_GOALIE_SPEED + (scoreFactor * 0.2), 1.5);
+            currentGoalieHeight = Math.max(BASE_GOALIE_HEIGHT_PX - (scoreFactor * 10), MIN_GOALIE_HEIGHT_PX);
+            
+            goalie.style.height = `${currentGoalieHeight}px`;
+            
+            // 2. Defender Activation
+            isDefender1Active = score >= 50;
+            isDefender2Active = score >= 100;
+        }
+        
+        /**
+         * Updates the goalie's autonomous movement.
+         */
+        function updateGoalie() {
+            goalieY += currentGoalieSpeed * goalieDirection;
+            
+            if (goalieY >= goalieRange.max) {
+                goalieDirection = -1;
+                goalieY = goalieRange.max;
+            } else if (goalieY <= goalieRange.min) {
+                goalieDirection = 1;
+                goalieY = goalieRange.min;
+            }
+
+            goalie.style.top = `${goalieY}%`;
+        }
+
+        /**
+         * Updates the opponent defenders' movement logic.
+         */
+        function updateDefenders() {
+            
+            // --- Defender 1 Logic ---
+            if (isDefender1Active) {
+                defender1.style.opacity = 1;
+                const deltaY1 = ballY - defender1Y;
+                if (Math.abs(deltaY1) > 1) {
+                    defender1Y += Math.sign(deltaY1) * Math.min(DEFENDER_SPEED, Math.abs(deltaY1) * 0.1);
+                }
+                defender1.style.left = `${defender1X}%`;
+                defender1.style.top = `${defender1Y}%`;
+            } else {
+                defender1.style.opacity = 0;
+            }
+
+            // --- Defender 2 Logic ---
+            if (isDefender2Active) {
+                defender2.style.opacity = 1;
+                const deltaY2 = ballY - defender2Y;
+                if (Math.abs(deltaY2) > 1) {
+                    defender2Y += Math.sign(deltaY2) * Math.min(DEFENDER_SPEED * 1.2, Math.abs(deltaY2) * 0.1); 
+                }
+                defender2.style.left = `${defender2X}%`;
+                defender2.style.top = `${defender2Y}%`;
+            } else {
+                defender2.style.opacity = 0;
+            }
+        }
+
+
+        // --- Core Game Loop and Player Control ---
+
+        /**
+         * Updates the ball's position based on currently pressed keys.
+         */
+        function updateBallPosition() {
+            let moved = false;
+            
+            // Movement logic
+            if (keysPressed['ArrowUp'] || keysPressed['KeyW']) {
+                ballY = Math.max(0, ballY - ballSpeed);
+                moved = true;
+            }
+            if (keysPressed['ArrowDown'] || keysPressed['KeyS']) {
+                ballY = Math.min(100, ballY + ballSpeed);
+                moved = true;
+            }
+            if (keysPressed['ArrowLeft'] || keysPressed['KeyA']) {
+                ballX = Math.max(startBallX, ballX - ballSpeed);
+                moved = true;
+            }
+            if (keysPressed['ArrowRight'] || keysPressed['KeyD']) {
+                ballX = Math.min(95, ballX + ballSpeed); 
+                moved = true;
+            }
+
+            if (moved) {
+                // Apply new position
+                ball.style.left = `${ballX}%`;
+                ball.style.top = `${ballY}%`;
+            }
+        }
+        
+        /**
+         * Main animation loop runs constantly to update player and AI positions.
+         */
+        function gameLoop() {
+            if (!isBallMoving) {
+                updateBallPosition(); // Only allow manual movement when not passing/shooting
+            }
+            updateGoalie();
+            updateDefenders(); // Update both defenders' positions
+            requestAnimationFrame(gameLoop);
+        }
+
+        // --- Shot, Pass, and Scoring Logic ---
+        
+        function clearPasserMarkers() {
+            document.querySelectorAll('.pass-marker').forEach(marker => {
+                marker.remove();
+            });
+        }
+        
+        function createPasserMarker() {
+            clearPasserMarkers(); 
+            const marker = document.createElement('div');
+            marker.className = 'pass-marker';
+            marker.style.left = `${ballX}%`;
+            marker.style.top = `${ballY}%`;
+            marker.textContent = 'P'; 
+            gameContainer.appendChild(marker);
+        }
+
+
+        /**
+         * Resets the ball state and element style to the start.
+         */
+        function resetBall() {
+            isBallMoving = false;
+            clearPasserMarkers(); 
+            
+            // Crucial: Update difficulty after scoring/missing
+            updateGoalieAndDefenderStats(); 
+
+            // Make sure all teammate elements are visible again for the new attempt
+            document.getElementById('player1').style.visibility = 'visible';
+            document.getElementById('player2').style.visibility = 'visible';
+            
+            // Reset ball state
+            ballX = startBallX; 
+            ballY = 50;
+            
+            // Reset element styling.
+            ball.style.cssText = `
+                left: ${ballX}%;
+                top: ${ballY}%;
+                transform: translate(-50%, -50%); 
+                transition: ''; 
+                background: radial-gradient(circle at 35% 35%, white 2px, black 4px, white 6px, black 8px, white 12px, black 13px, white 15px);
+            `;
+            ball.removeEventListener('transitionend', handleShotResult);
+            goalie.style.backgroundColor = '#FF5722'; 
+        }
+
+        /**
+         * Calculates the score based on the distance from the goal.
+         */
+        function calculatePoints(currentBallX) {
+            const distanceFactor = 100 - currentBallX; 
+            const basePoints = 10;
+            const multiplier = 1 + (distanceFactor / 40);
+            return Math.ceil(basePoints * multiplier); 
+        }
+
+        /**
+         * Checks for collision between two elements using their bounding boxes.
+         */
+        function checkElementCollision(rect1, rect2) {
+            return (
+                rect1.left < rect2.right &&
+                rect1.right > rect2.left &&
+                rect1.top < rect2.bottom &&
+                rect1.bottom > rect2.top
+            );
+        }
+        
+        /**
+         * Handles the end of a shot movement (score, block, miss, or defense).
+         * Prioritizes saves/blocks over scoring.
+         */
+        function handleShotResult(e) {
+            if (e.propertyName !== 'transform' || !isBallMoving) return; 
+
+            isBallMoving = false;
+            clearPasserMarkers(); 
+
+            const ballRect = ball.getBoundingClientRect();
+            const goalRect = goal.getBoundingClientRect();
+            const goalieRect = goalie.getBoundingClientRect();
+            const defender1Rect = defender1.getBoundingClientRect();
+            const defender2Rect = defender2.getBoundingClientRect();
+
+            let defensiveResult = null; // Stores 'D1', 'D2', or 'GOALIE' if successful defense occurred.
+
+            // --- 1. Check ALL defensive blocks/saves first (Highest Priority) ---
+
+            // Check D2 (Closest to goal)
+            if (isDefender2Active && checkElementCollision(ballRect, defender2Rect)) {
+                defensiveResult = 'D2';
+            } 
+            // Check D1 
+            else if (isDefender1Active && checkElementCollision(ballRect, defender1Rect)) {
+                defensiveResult = 'D1';
+            }
+            // Check Goalie Save
+            else if (checkElementCollision(ballRect, goalieRect)) {
+                defensiveResult = 'GOALIE';
+            }
+            
+            // --- Handle Blocked/Saved Shot ---
+            if (defensiveResult) {
+                lastPointsDisplay.textContent = 'BLOCKED!';
+                ball.style.backgroundColor = 'purple'; 
+                goalie.style.backgroundColor = defensiveResult === 'GOALIE' ? 'lime' : '#FF5722';
+                
+                let message = 'SHOT SAVED!';
+                let color = '#DC3545';
+                
+                if (defensiveResult === 'GOALIE') {
+                    message = 'SHOT SAVED BY GOALIE!';
+                    color = '#007BFF';
+                } else if (defensiveResult === 'D1') {
+                    message = 'SHOT BLOCKED BY D1!';
+                    color = '#9C27B0';
+                } else if (defensiveResult === 'D2') {
+                    message = 'SHOT BLOCKED BY D2!';
+                    color = '#8B0000';
+                }
+
+                showMessage(message, color);
+                setTimeout(resetBall, 1500); 
+                ball.style.transition = '';
+                return; // CRITICAL: Stop here if saved/blocked
+            }
+
+
+            // --- 2. Check for Goal (Only if NOT defensively blocked) ---
+            if (checkElementCollision(ballRect, goalRect)) {
+                // Scored!
+                const points = calculatePoints(ballX); 
+                score += points;
+                
+                scoreValue.textContent = score;
+                lastPointsDisplay.textContent = points;
+                
+                ball.style.backgroundColor = 'gold';
+                showMessage(`GOAL! +${points} pts!`, '#28A745'); 
+                setTimeout(resetBall, 1500); 
+
+            } else {
+                // Missed!
+                lastPointsDisplay.textContent = 'Miss';
+                ball.style.backgroundColor = 'red';
+                showMessage('Missed the Goal!', '#DC3545');
+                setTimeout(resetBall, 1500); 
+            }
+            ball.style.transition = ''; 
+        }
+
+
+        /**
+         * Triggers the shoot action when the spacebar is pressed.
+         */
+        function shootBall() {
+            if (isBallMoving) return; 
+
+            isBallMoving = true;
+            lastPointsDisplay.textContent = 'Shooting...';
+
+            clearPasserMarkers(); 
+            document.getElementById('player1').style.visibility = 'visible';
+            document.getElementById('player2').style.visibility = 'visible';
+
+            const containerRect = gameContainer.getBoundingClientRect();
+            const ballRect = ball.getBoundingClientRect();
+            
+            // 1. Determine the final target percentage coordinates
+            const targetX = 97; 
+            let targetY = 50;   
+            
+            // Dynamic Vertical Offset based on key press (Up/Down arrows for direction)
+            const maxDeviation = 20; 
+            let verticalInput = 0; 
+
+            if (keysPressed['ArrowUp'] || keysPressed['KeyW']) {
+                verticalInput = -1;
+            } else if (keysPressed['ArrowDown'] || keysPressed['KeyS']) {
+                verticalInput = 1;
+            }
+            
+            targetY += verticalInput * maxDeviation; 
+            
+            // Clamp targetY to a visible area within the goal's vertical boundaries 
+            targetY = Math.max(25, targetY); 
+            targetY = Math.min(75, targetY);
+
+
+            // 2. Get current pixel position relative to the container for calculation
+            const currentPixelX = ball.offsetLeft + ballRect.width / 2;
+            const currentPixelY = ball.offsetTop + ballRect.height / 2;
+            
+            // 3. Calculate target pixel position based on new target percentage
+            const targetPixelX = (targetX / 100) * containerRect.width;
+            const targetPixelY = (targetY / 100) * containerRect.height;
+            
+            // 4. Calculate the pixel delta for the CSS transform
+            const pixelDeltaX = targetPixelX - currentPixelX;
+            const pixelDeltaY = targetPixelY - currentPixelY;
+
+            // 5. Update ballX and ballY state to the final target position
+            ballX = targetX;
+            ballY = targetY;
+
+            // 6. Execute the transition
+            ball.style.transition = 'transform 0.6s linear';
+            
+            // Apply transform relative to the starting position
+            ball.style.transform = `translate(calc(-50% + ${pixelDeltaX}px), calc(-50% + ${pixelDeltaY}px))`;
+
+            // Listen for the transition end to check for scoring
+            ball.addEventListener('transitionend', handleShotResult, { once: true });
+        }
+        
+        /**
+         * Handles the end of a passing movement, returning control to the player.
+         */
+        function handlePassEnd(e) {
+            // Wait for 'left' or 'top' transitions to end
+            if (e.propertyName !== 'left' && e.propertyName !== 'top') return;
+            
+            if (!isBallMoving) return; 
+
+            isBallMoving = false;
+            ball.style.transition = ''; 
+            lastPointsDisplay.textContent = '0';
+            showMessage(`Control switched!`, '#FFC107'); 
+        }
+
+        /**
+         * Triggers the ball movement towards a teammate, transferring possession.
+         */
+        function passBall(targetPlayerId) {
+            const target = playerPositions[targetPlayerId];
+            if (!target || isBallMoving) return;
+
+            const targetElement = document.getElementById(`player${targetPlayerId}`);
+            const otherElementId = targetPlayerId === '1' ? 'player2' : 'player1';
+            const otherElement = document.getElementById(otherElementId);
+
+            createPasserMarker();
+
+            isBallMoving = true;
+            lastPointsDisplay.textContent = `Passing to ${targetPlayerId}...`;
+            
+            if (otherElement) {
+                otherElement.style.visibility = 'visible'; 
+            }
+            
+            if (targetElement) {
+                targetElement.style.visibility = 'hidden'; 
+            }
+
+            ballX = target.x;
+            ballY = target.y;
+
+            ball.style.transition = '';
+            ball.style.transform = 'translate(-50%, -50%)'; 
+
+            ball.style.transition = 'left 0.4s ease-out, top 0.4s ease-out';
+            
+            ball.style.left = `${ballX}%`;
+            ball.style.top = `${ballY}%`;
+
+            ball.addEventListener('transitionend', handlePassEnd, { once: true });
+        }
+
+
+        // --- Keyboard and Message Handlers ---
+        
+        function handleKeyDown(e) {
+            keysPressed[e.code] = true;
+            
+            if (!isBallMoving) {
+                if (e.code === 'Space') {
+                    e.preventDefault(); 
+                    shootBall(); 
+                } else if (e.code === 'Digit1' || e.code === 'Numpad1') {
+                    e.preventDefault();
+                    passBall('1');
+                } else if (e.code === 'Digit2' || e.code === 'Numpad2') {
+                    e.preventDefault();
+                    passBall('2');
+                }
+            }
+        }
+
+        function handleKeyUp(e) {
+            delete keysPressed[e.code];
+        }
+
+        /**
+         * Custom Message Box to replace alert().
+         */
+        function showMessage(text, color) {
+            let msgBox = document.getElementById('message-box');
+            if (!msgBox) {
+                msgBox = document.createElement('div');
+                msgBox.id = 'message-box';
+                msgBox.style.cssText = `
+                    position: fixed;
+                    top: 50%;
+                    left: 50%;
+                    transform: translate(-50%, -50%) scale(0.9);
+                    padding: 20px 40px;
+                    border-radius: 12px;
+                    background-color: ${color};
+                    color: white;
+                    font-size: 2em;
+                    font-weight: bold;
+                    box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+                    z-index: 1000;
+                    opacity: 0;
+                    transition: opacity 0.3s ease-in-out, transform 0.3s ease-in-out;
+                `;
+                document.body.appendChild(msgBox);
+            }
+            msgBox.textContent = text;
+            msgBox.style.backgroundColor = color;
+            msgBox.style.opacity = 1;
+            msgBox.style.transform = 'translate(-50%, -50%) scale(1.1)';
+
+            setTimeout(() => {
+                msgBox.style.opacity = 0;
+                msgBox.style.transform = 'translate(-50%, -50%) scale(0.9)';
+            }, 1000); // Message disappears after 1 second
+        }
+
+
+        // --- Initialization ---
+
+        window.addEventListener('keydown', handleKeyDown);
+        window.addEventListener('keyup', handleKeyUp);
+
+        updateGoalieAndDefenderStats(); // Initial setup
+        requestAnimationFrame(gameLoop); // Start the continuous animation loop
+
+    </script>
+</body>
+</html>
